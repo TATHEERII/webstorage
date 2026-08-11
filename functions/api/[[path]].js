@@ -2,66 +2,66 @@ import { generateId, hashPassword, verifyPassword, createSession, getSession, js
 
 const SESSION_TTL = 60 * 60 * 24 * 7;
 
-export async function onRequest(context) {
-  const request = context.request;
-  const env = context.env;
-  const url = new URL(request.url);
-  const cors = corsHeaders(request);
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const cors = corsHeaders(request);
 
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: cors });
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: cors });
+    }
+
+    try {
+      if (url.pathname === '/api/register' && request.method === 'POST') {
+        return handleRegister(request, env, cors);
+      }
+      if (url.pathname === '/api/login' && request.method === 'POST') {
+        return handleLogin(request, env, cors);
+      }
+      if (url.pathname === '/api/logout' && request.method === 'POST') {
+        return handleLogout(request, env, cors);
+      }
+      if (url.pathname === '/api/me' && request.method === 'GET') {
+        return handleMe(request, env, cors);
+      }
+      if (url.pathname === '/api/admin/users' && request.method === 'GET') {
+        return handleAdminListUsers(request, env, cors);
+      }
+      if (url.pathname === '/api/admin/users' && request.method === 'POST') {
+        return handleAdminCreateUser(request, env, cors);
+      }
+      if (url.pathname === '/api/admin/users' && request.method === 'DELETE') {
+        return handleAdminDeleteUser(request, env, cors);
+      }
+      if (url.pathname === '/api/files' && request.method === 'POST') {
+        return handleUploadFile(request, env, cors);
+      }
+      if (url.pathname === '/api/files' && request.method === 'GET') {
+        return handleListFiles(request, env, cors);
+      }
+      if (url.pathname === '/api/files/download' && request.method === 'GET') {
+        return handleDownloadFile(request, env, cors);
+      }
+      if (url.pathname === '/api/files' && request.method === 'DELETE') {
+        return handleDeleteFile(request, env, cors);
+      }
+      if (url.pathname === '/api/share' && request.method === 'POST') {
+        return handleShareFile(request, env, cors);
+      }
+      if (url.pathname === '/api/shared' && request.method === 'GET') {
+        return handleListShared(request, env, cors);
+      }
+      if (url.pathname === '/api/health' && request.method === 'GET') {
+        return jsonResponse({ status: 'ok' }, cors);
+      }
+
+      return jsonResponse({ error: 'Not found' }, cors, 404);
+    } catch (err) {
+      console.error(err);
+      return errorResponse('Internal server error', 500, cors);
+    }
   }
-
-  try {
-    if (url.pathname === '/api/register' && request.method === 'POST') {
-      return handleRegister(request, env, cors);
-    }
-    if (url.pathname === '/api/login' && request.method === 'POST') {
-      return handleLogin(request, env, cors);
-    }
-    if (url.pathname === '/api/logout' && request.method === 'POST') {
-      return handleLogout(request, env, cors);
-    }
-    if (url.pathname === '/api/me' && request.method === 'GET') {
-      return handleMe(request, env, cors);
-    }
-    if (url.pathname === '/api/admin/users' && request.method === 'GET') {
-      return handleAdminListUsers(request, env, cors);
-    }
-    if (url.pathname === '/api/admin/users' && request.method === 'POST') {
-      return handleAdminCreateUser(request, env, cors);
-    }
-    if (url.pathname === '/api/admin/users' && request.method === 'DELETE') {
-      return handleAdminDeleteUser(request, env, cors);
-    }
-    if (url.pathname === '/api/files' && request.method === 'POST') {
-      return handleUploadFile(request, env, cors);
-    }
-    if (url.pathname === '/api/files' && request.method === 'GET') {
-      return handleListFiles(request, env, cors);
-    }
-    if (url.pathname === '/api/files/download' && request.method === 'GET') {
-      return handleDownloadFile(request, env, cors);
-    }
-    if (url.pathname === '/api/files' && request.method === 'DELETE') {
-      return handleDeleteFile(request, env, cors);
-    }
-    if (url.pathname === '/api/share' && request.method === 'POST') {
-      return handleShareFile(request, env, cors);
-    }
-    if (url.pathname === '/api/shared' && request.method === 'GET') {
-      return handleListShared(request, env, cors);
-    }
-    if (url.pathname === '/api/health' && request.method === 'GET') {
-      return jsonResponse({ status: 'ok' }, cors);
-    }
-
-    return jsonResponse({ error: 'Not found' }, cors, 404);
-  } catch (err) {
-    console.error(err);
-    return errorResponse('Internal server error', 500, cors);
-  }
-}
+};
 
 async function handleRegister(request, env, cors) {
   const { email, password, name } = await request.json();
