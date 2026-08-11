@@ -1,69 +1,69 @@
-import { generateId, hashPassword, verifyPassword, createSession, getSession, jsonResponse, corsHeaders, errorResponse } from './utils.js';
+import { generateId, hashPassword, verifyPassword, createSession, getSession, jsonResponse, corsHeaders, errorResponse } from '../utils.js';
 
 const SESSION_TTL = 60 * 60 * 24 * 7;
 
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const cors = corsHeaders(request);
+export async function onRequest(context) {
+  const request = context.request;
+  const env = context.env;
+  const url = new URL(request.url);
+  const cors = corsHeaders(request);
 
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: cors });
-    }
-
-    try {
-      if (url.pathname === '/api/register' && request.method === 'POST') {
-        return handleRegister(request, env);
-      }
-      if (url.pathname === '/api/login' && request.method === 'POST') {
-        return handleLogin(request, env);
-      }
-      if (url.pathname === '/api/logout' && request.method === 'POST') {
-        return handleLogout(request, env);
-      }
-      if (url.pathname === '/api/me' && request.method === 'GET') {
-        return handleMe(request, env);
-      }
-      if (url.pathname === '/api/admin/users' && request.method === 'GET') {
-        return handleAdminListUsers(request, env);
-      }
-      if (url.pathname === '/api/admin/users' && request.method === 'POST') {
-        return handleAdminCreateUser(request, env);
-      }
-      if (url.pathname === '/api/admin/users' && request.method === 'DELETE') {
-        return handleAdminDeleteUser(request, env);
-      }
-      if (url.pathname === '/api/files' && request.method === 'POST') {
-        return handleUploadFile(request, env);
-      }
-      if (url.pathname === '/api/files' && request.method === 'GET') {
-        return handleListFiles(request, env);
-      }
-      if (url.pathname === '/api/files/download' && request.method === 'GET') {
-        return handleDownloadFile(request, env);
-      }
-      if (url.pathname === '/api/files' && request.method === 'DELETE') {
-        return handleDeleteFile(request, env);
-      }
-      if (url.pathname === '/api/share' && request.method === 'POST') {
-        return handleShareFile(request, env);
-      }
-      if (url.pathname === '/api/shared' && request.method === 'GET') {
-        return handleListShared(request, env);
-      }
-      if (url.pathname === '/api/health' && request.method === 'GET') {
-        return jsonResponse({ status: 'ok' }, cors);
-      }
-
-      return jsonResponse({ error: 'Not found' }, cors, 404);
-    } catch (err) {
-      console.error(err);
-      return errorResponse('Internal server error', 500, cors);
-    }
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: cors });
   }
-};
 
-async function handleRegister(request, env) {
+  try {
+    if (url.pathname === '/api/register' && request.method === 'POST') {
+      return handleRegister(request, env, cors);
+    }
+    if (url.pathname === '/api/login' && request.method === 'POST') {
+      return handleLogin(request, env, cors);
+    }
+    if (url.pathname === '/api/logout' && request.method === 'POST') {
+      return handleLogout(request, env, cors);
+    }
+    if (url.pathname === '/api/me' && request.method === 'GET') {
+      return handleMe(request, env, cors);
+    }
+    if (url.pathname === '/api/admin/users' && request.method === 'GET') {
+      return handleAdminListUsers(request, env, cors);
+    }
+    if (url.pathname === '/api/admin/users' && request.method === 'POST') {
+      return handleAdminCreateUser(request, env, cors);
+    }
+    if (url.pathname === '/api/admin/users' && request.method === 'DELETE') {
+      return handleAdminDeleteUser(request, env, cors);
+    }
+    if (url.pathname === '/api/files' && request.method === 'POST') {
+      return handleUploadFile(request, env, cors);
+    }
+    if (url.pathname === '/api/files' && request.method === 'GET') {
+      return handleListFiles(request, env, cors);
+    }
+    if (url.pathname === '/api/files/download' && request.method === 'GET') {
+      return handleDownloadFile(request, env, cors);
+    }
+    if (url.pathname === '/api/files' && request.method === 'DELETE') {
+      return handleDeleteFile(request, env, cors);
+    }
+    if (url.pathname === '/api/share' && request.method === 'POST') {
+      return handleShareFile(request, env, cors);
+    }
+    if (url.pathname === '/api/shared' && request.method === 'GET') {
+      return handleListShared(request, env, cors);
+    }
+    if (url.pathname === '/api/health' && request.method === 'GET') {
+      return jsonResponse({ status: 'ok' }, cors);
+    }
+
+    return jsonResponse({ error: 'Not found' }, cors, 404);
+  } catch (err) {
+    console.error(err);
+    return errorResponse('Internal server error', 500, cors);
+  }
+}
+
+async function handleRegister(request, env, cors) {
   const { email, password, name } = await request.json();
   if (!email || !password || !name) {
     return errorResponse('Missing fields', 400, cors);
@@ -90,7 +90,7 @@ async function handleRegister(request, env) {
   return jsonResponse({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, session }, cors);
 }
 
-async function handleLogin(request, env) {
+async function handleLogin(request, env, cors) {
   const { email, password } = await request.json();
   const data = await env.STORAGE.get(`user:${email}`);
   if (!data) {
@@ -107,7 +107,7 @@ async function handleLogin(request, env) {
   return jsonResponse({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, session }, cors);
 }
 
-async function handleLogout(request, env) {
+async function handleLogout(request, env, cors) {
   const sessionId = request.headers.get('X-Session-ID');
   if (sessionId) {
     await env.STORAGE.delete(`session:${sessionId}`);
@@ -115,7 +115,7 @@ async function handleLogout(request, env) {
   return jsonResponse({ success: true }, cors);
 }
 
-async function handleMe(request, env) {
+async function handleMe(request, env, cors) {
   const session = await getSession(request, env);
   if (!session) {
     return errorResponse('Unauthorized', 401, cors);
@@ -128,7 +128,7 @@ async function handleMe(request, env) {
   return jsonResponse({ user: { id: user.id, email: user.email, name: user.name, role: user.role } }, cors);
 }
 
-async function handleAdminListUsers(request, env) {
+async function handleAdminListUsers(request, env, cors) {
   const session = await getSession(request, env);
   if (!session || session.role !== 'admin') {
     return errorResponse('Forbidden', 403, cors);
@@ -147,7 +147,7 @@ async function handleAdminListUsers(request, env) {
   return jsonResponse({ users }, cors);
 }
 
-async function handleAdminCreateUser(request, env) {
+async function handleAdminCreateUser(request, env, cors) {
   const session = await getSession(request, env);
   if (!session || session.role !== 'admin') {
     return errorResponse('Forbidden', 403, cors);
@@ -176,7 +176,7 @@ async function handleAdminCreateUser(request, env) {
   return jsonResponse({ user: { id: user.id, email: user.email, name: user.name, role: user.role } }, cors);
 }
 
-async function handleAdminDeleteUser(request, env) {
+async function handleAdminDeleteUser(request, env, cors) {
   const session = await getSession(request, env);
   if (!session || session.role !== 'admin') {
     return errorResponse('Forbidden', 403, cors);
@@ -190,20 +190,17 @@ async function handleAdminDeleteUser(request, env) {
 
   await env.STORAGE.delete(`user:${email}`);
 
-  const fileCursor = env.STORAGE.list({ prefix: `file:${email}:` });
-  const sharedCursor = env.STORAGE.list({ prefix: `share:${email}:` });
+  const fileResult = await env.STORAGE.list({ prefix: `file:${email}:` });
+  const shareResult = await env.STORAGE.list({ prefix: `share:${email}:` });
 
-  for (const list of [fileCursor, sharedCursor]) {
-    const result = await list;
-    for (const key of result.keys) {
-      await env.STORAGE.delete(key.name);
-    }
+  for (const key of [...fileResult.keys, ...shareResult.keys]) {
+    await env.STORAGE.delete(key.name);
   }
 
   return jsonResponse({ success: true }, cors);
 }
 
-async function handleUploadFile(request, env) {
+async function handleUploadFile(request, env, cors) {
   const session = await getSession(request, env);
   if (!session) {
     return errorResponse('Unauthorized', 401, cors);
@@ -242,7 +239,7 @@ async function handleUploadFile(request, env) {
   return jsonResponse({ file: fileMeta }, cors);
 }
 
-async function handleListFiles(request, env) {
+async function handleListFiles(request, env, cors) {
   const session = await getSession(request, env);
   if (!session) {
     return errorResponse('Unauthorized', 401, cors);
@@ -263,7 +260,7 @@ async function handleListFiles(request, env) {
   return jsonResponse({ files }, cors);
 }
 
-async function handleDownloadFile(request, env) {
+async function handleDownloadFile(request, env, cors) {
   const session = await getSession(request, env);
   if (!session) {
     return errorResponse('Unauthorized', 401, cors);
@@ -294,7 +291,7 @@ async function handleDownloadFile(request, env) {
   });
 }
 
-async function handleDeleteFile(request, env) {
+async function handleDeleteFile(request, env, cors) {
   const session = await getSession(request, env);
   if (!session) {
     return errorResponse('Unauthorized', 401, cors);
@@ -315,7 +312,7 @@ async function handleDeleteFile(request, env) {
   return jsonResponse({ success: true }, cors);
 }
 
-async function handleShareFile(request, env) {
+async function handleShareFile(request, env, cors) {
   const session = await getSession(request, env);
   if (!session) {
     return errorResponse('Unauthorized', 401, cors);
@@ -338,7 +335,7 @@ async function handleShareFile(request, env) {
   return jsonResponse({ success: true }, cors);
 }
 
-async function handleListShared(request, env) {
+async function handleListShared(request, env, cors) {
   const session = await getSession(request, env);
   if (!session) {
     return errorResponse('Unauthorized', 401, cors);

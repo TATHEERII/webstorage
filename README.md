@@ -1,6 +1,6 @@
 # Cloudflare Storage Website
 
-A fully serverless storage website hosted on Cloudflare with authentication, private/shared file storage, and admin user management.
+A fully serverless storage website hosted on Cloudflare Pages with authentication, private/shared file storage, and admin user management.
 
 ## Features
 
@@ -8,38 +8,38 @@ A fully serverless storage website hosted on Cloudflare with authentication, pri
 - Private file storage per user
 - Shared file storage (share files with other users)
 - Admin panel to create and delete users
-- All hosted on Cloudflare (Workers + KV + R2)
+- All hosted on Cloudflare Pages + Pages Functions + KV + R2
+
+## Project Structure
+
+```
+├── functions/
+│   ├── api/[[path]].js   # Pages Functions API routes
+│   └── utils.js          # Auth and utility helpers
+├── public/
+│   └── index.html        # Frontend SPA
+├── package.json
+└── README.md
+```
 
 ## Setup
 
-1. Install Wrangler:
-   ```bash
-   npm install -g wrangler
-   ```
+1. Connect this repository to Cloudflare Pages in the dashboard.
 
-2. Create KV namespace:
-   ```bash
-   wrangler kv namespace create STORAGE
-   wrangler kv namespace create STORAGE --preview
-   ```
+2. Configure KV and R2 bindings in Pages:
+   - Go to **Settings > Functions > Bindings**
+   - Add KV namespace binding: `STORAGE`
+   - Add R2 bucket binding: `FILES`
 
-3. Create R2 bucket:
-   ```bash
-   wrangler r2 bucket create storage-files
-   ```
+3. Set environment variable:
+   - Go to **Settings > Environment variables**
+   - Add `ADMIN_EMAILS` with comma-separated admin emails
 
-4. Update `wrangler.toml` with the KV namespace IDs and R2 bucket name.
+4. Deploy - Pages automatically detects the `functions/` and `public/` directories.
 
-5. Set admin emails:
-   ```bash
-   wrangler secret put ADMIN_EMAILS
-   ```
+## Local Development
 
-6. Deploy:
-   ```bash
-   wrangler deploy
-   ```
-
-## Environment Variables
-
-- `ADMIN_EMAILS`: Comma-separated list of admin email addresses. Users with these emails get admin role on registration.
+```bash
+npm install
+npm run dev
+```
