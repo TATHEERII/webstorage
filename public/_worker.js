@@ -1,4 +1,4 @@
-import { generateId, hashPassword, verifyPassword, createSession, getSession, jsonResponse, corsHeaders, errorResponse } from '../utils.js';
+import { generateId, hashPassword, verifyPassword, createSession, getSession, jsonResponse, corsHeaders, errorResponse } from './utils.js';
 
 const SESSION_TTL = 60 * 60 * 24 * 7;
 
@@ -9,6 +9,15 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: cors });
+    }
+
+    if (url.pathname === '/' || url.pathname === '/index.html') {
+      const html = await env.ASSETS.fetch(request);
+      return html;
+    }
+
+    if (!url.pathname.startsWith('/api/')) {
+      return env.ASSETS.fetch(request);
     }
 
     try {
