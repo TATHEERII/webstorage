@@ -1,0 +1,17 @@
+name = "cloudflare-storage"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "STORAGE"
+id = "85957c86bd0c4abb83d3ff31e7cc2948"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "storage-files"
+
+[vars]
+ADMIN_EMAILS = "admin@example.com"
+
+[assets]
+directory = "public"
