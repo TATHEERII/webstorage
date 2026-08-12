@@ -467,21 +467,7 @@
       });
       if (res.error) return alert(res.error);
       closeNewFolderModal();
-      if (res.folder) {
-        const tbody = document.getElementById('files-container');
-        const empty = document.getElementById('files-empty');
-        empty.classList.add('hidden');
-        const row = document.createElement('tr');
-        row.className = 'file-row';
-        row.innerHTML = `<td><div class="file-name-cell"><span class="folder-icon">📁</span> ${res.folder.name}</div></td>
-          <td>-</td>
-          <td>${new Date(res.folder.createdAt).toLocaleDateString()}</td>
-          <td><button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();deleteFolder('${res.folder.id}')">Delete</button></td>`;
-        row.ondblclick = () => enterFolder(res.folder.id, res.folder.name);
-        tbody.appendChild(row);
-      } else {
-        loadFiles();
-      }
+      loadFiles();
     }
 
     async function deleteFolder(folderId) {
