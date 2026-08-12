@@ -468,14 +468,6 @@
       btn.innerHTML = '<span class="btn-spinner"></span>Creating...';
 
       const tempId = 'temp-' + Date.now();
-      const optimisticFolder = {
-        id: tempId,
-        name,
-        parentId: currentFolderId,
-        owner: currentUser.email,
-        createdAt: Date.now()
-      };
-
       const tbody = document.getElementById('files-container');
       const empty = document.getElementById('files-empty');
       empty.classList.add('hidden');
@@ -512,8 +504,6 @@
         realRow.querySelector('.btn-danger').setAttribute('onclick', `event.stopPropagation();deleteFolder('${res.folder.id}')`);
         realRow.ondblclick = () => enterFolder(res.folder.id, res.folder.name);
       }
-
-      setTimeout(() => loadFiles(), 300);
     }
 
     async function deleteFolder(folderId) {
