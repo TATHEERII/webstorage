@@ -51,6 +51,15 @@ export default {
       if (url.pathname === '/api/shared' && request.method === 'GET') {
         return handleListShared(request, env, cors);
       }
+      if (url.pathname === '/api/folders' && request.method === 'POST') {
+        return handleCreateFolder(request, env, cors);
+      }
+      if (url.pathname === '/api/folders' && request.method === 'GET') {
+        return handleListFolders(request, env, cors);
+      }
+      if (url.pathname === '/api/folders' && request.method === 'DELETE') {
+        return handleDeleteFolder(request, env, cors);
+      }
       if (url.pathname === '/api/health' && request.method === 'GET') {
         return jsonResponse({ status: 'ok' }, cors);
       }
@@ -212,6 +221,7 @@ async function handleUploadFile(request, env, cors) {
   const formData = await request.formData();
   const file = formData.get('file');
   const visibility = formData.get('visibility') || 'private';
+  const folderId = formData.get('folderId') || null;
 
   if (!file) {
     return errorResponse('No file provided', 400, cors);
@@ -234,6 +244,7 @@ async function handleUploadFile(request, env, cors) {
     size: arrayBuffer.byteLength,
     type: file.type,
     visibility,
+    folderId,
     owner: session.email,
     createdAt: Date.now()
   };
@@ -249,19 +260,34 @@ async function handleListFiles(request, env, cors) {
   }
 
   const visibility = request.headers.get('X-Visibility') || 'private';
+  const folderId = request.headers.get('X-Folder-ID') || null;
   const { keys } = await env.STORAGE.list({ prefix: `file:${session.email}:` });
   const files = [];
   for (const key of keys) {
     const data = await env.STORAGE.get(key.name);
     if (data) {
       const file = JSON.parse(data);
+      if (file.folderId !== folderId) continue;
       if (visibility === 'shared' ? file.visibility === 'shared' : file.visibility !== 'shared') {
         files.push(file);
       }
     }
   }
 
-  return jsonResponse({ files }, cors);
+  const folderPrefix = `folder:${session.email}:`;
+  const folderResult = await env.STORAGE.list({ prefix: folderPrefix });
+  const folders = [];
+  for (const key of folderResult.keys) {
+    const data = await env.STORAGE.get(key.name);
+    if (data) {
+      const folder = JSON.parse(data);
+      if (folder.parentId === folderId) {
+        folders.push(folder);
+      }
+    }
+  }
+
+  return jsonResponse({ files, folders }, cors);
 }
 
 async function handleDownloadFile(request, env, cors) {
@@ -357,4 +383,107 @@ async function handleListShared(request, env, cors) {
   }
 
   return jsonResponse({ files }, cors);
+}
+
+async function handleCreateFolder(request, env, cors) {
+  const session = await getSession(request, env);
+  if (!session) {
+    return errorResponse('Unauthorized', 401, cors);
+  }
+
+  const { name, parentId } = await request.json();
+  if (!name) {
+    return errorResponse('Folder name required', 400, cors);
+  }
+
+  const folderId = generateId();
+  const folder = {
+    id: folderId,
+    name,
+    parentId: parentId || null,
+    owner: session.email,
+    createdAt: Date.now()
+  };
+
+  await env.STORAGE.put(`folder:${session.email}:${folderId}`, JSON.stringify(folder));
+  return jsonResponse({ folder }, cors);
+}
+
+async function handleListFolders(request, env, cors) {
+  const session = await getSession(request, env);
+  if (!session) {
+    return errorResponse('Unauthorized', 401, cors);
+  }
+
+  const parentId = request.headers.get('X-Parent-ID') || null;
+  const prefix = `folder:${session.email}:`;
+  const { keys } = await env.STORAGE.list({ prefix });
+  const folders = [];
+  for (const key of keys) {
+    const data = await env.STORAGE.get(key.name);
+    if (data) {
+      const folder = JSON.parse(data);
+      if (folder.parentId === parentId) {
+        folders.push(folder);
+      }
+    }
+  }
+  return jsonResponse({ folders }, cors);
+}
+
+async function handleDeleteFolder(request, env, cors) {
+  const session = await getSession(request, env);
+  if (!session) {
+    return errorResponse('Unauthorized', 401, cors);
+  }
+
+  const { folderId } = await request.json();
+  if (!folderId) {
+    return errorResponse('Folder ID required', 400, cors);
+  }
+
+  const folderKey = `folder:${session.email}:${folderId}`;
+  const folderData = await env.STORAGE.get(folderKey);
+  if (!folderData) {
+    return errorResponse('Folder not found', 404, cors);
+  }
+
+  await deleteFolderRecursive(env, session.email, folderId);
+
+  await env.STORAGE.delete(folderKey);
+  return jsonResponse({ success: true }, cors);
+}
+
+async function deleteFolderRecursive(env, email, folderId) {
+  const prefix = `folder:${email}:`;
+  const { keys } = await env.STORAGE.list({ prefix });
+  const childFolders = [];
+  for (const key of keys) {
+    const data = await env.STORAGE.get(key.name);
+    if (data) {
+      const folder = JSON.parse(data);
+      if (folder.parentId === folderId) {
+        childFolders.push(folder.id);
+      }
+    }
+  }
+
+  for (const childId of childFolders) {
+    await deleteFolderRecursive(env, email, childId);
+    await env.STORAGE.delete(`folder:${email}:${childId}`);
+  }
+
+  const filePrefix = `file:${email}:`;
+  const fileResult = await env.STORAGE.list({ prefix: filePrefix });
+  for (const key of fileResult.keys) {
+    const data = await env.STORAGE.get(key.name);
+    if (data) {
+      const file = JSON.parse(data);
+      if (file.folderId === folderId) {
+        await env.FILES.delete(`${email}:${file.id}`);
+        await env.STORAGE.delete(key.name);
+        await env.STORAGE.delete(`share:${email}:${file.id}`);
+      }
+    }
+  }
 }

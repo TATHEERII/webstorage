@@ -58,6 +58,26 @@
     .spinner-overlay.active { display: flex; }
     .spinner { width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+    .breadcrumbs { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #4b5563; flex-wrap: wrap; }
+    .breadcrumb { cursor: pointer; color: #2563eb; }
+    .breadcrumb:hover { text-decoration: underline; }
+    .breadcrumb.current { color: #111827; cursor: default; text-decoration: none; font-weight: 600; }
+    .breadcrumb-sep { color: #9ca3af; }
+    .file-table { width: 100%; border-collapse: collapse; }
+    .file-table th { text-align: left; padding: 10px 8px; font-size: 12px; color: #6b7280; text-transform: uppercase; border-bottom: 2px solid #e5e7eb; font-weight: 600; }
+    .file-table td { padding: 10px 8px; border-bottom: 1px solid #f3f4f6; font-size: 14px; vertical-align: middle; }
+    .file-row { cursor: pointer; }
+    .file-row:hover { background: #f9fafb; }
+    .file-name-cell { display: flex; align-items: center; gap: 10px; }
+    .file-icon { font-size: 22px; }
+    .folder-icon { font-size: 22px; }
+    .empty-state { text-align: center; padding: 60px 20px; color: #9ca3af; }
+    .context-menu { position: absolute; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 150; min-width: 180px; padding: 6px 0; display: none; }
+    .context-menu.active { display: block; }
+    .context-menu-item { padding: 8px 16px; cursor: pointer; font-size: 14px; }
+    .context-menu-item:hover { background: #f3f4f6; }
+    .context-menu-item.danger { color: #dc2626; }
   </style>
 </head>
 <body>
@@ -101,24 +121,50 @@
           <div class="tab" onclick="showTab('shared-files')">Shared with Me</div>
         </div>
         <div id="my-files-tab">
-          <div class="switch">
-            <button class="active" onclick="setVisibility('private', this)">Private</button>
-            <button onclick="setVisibility('shared', this)">Shared by Me</button>
-          </div>
-          <div class="drop-zone" onclick="document.getElementById('file-input').click()">
-            <div style="font-size: 48px; margin-bottom: 10px;">+</div>
-            <div>Click or drag files here to upload</div>
-            <input type="file" id="file-input" class="hidden" onchange="uploadFile(this.files[0])" />
+          <div class="toolbar">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-secondary" id="back-btn" onclick="goBack()" style="display:none">Back</button>
+              <div id="breadcrumbs" class="breadcrumbs"></div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="openNewFolderModal()">New Folder</button>
+              <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">Upload</button>
+              <input type="file" id="file-input" class="hidden" onchange="uploadFile(this.files[0])" />
+            </div>
           </div>
           <div id="upload-progress" class="progress-wrap" style="display:none">
             <div class="progress-bar"><div id="upload-progress-fill" class="progress-fill"></div></div>
             <div id="upload-progress-text" class="progress-text">Uploading... 0%</div>
           </div>
-          <div id="files-container" style="margin-top: 20px;"></div>
+          <div style="overflow-x:auto;">
+            <table class="file-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th style="width:120px">Size</th>
+                  <th style="width:160px">Modified</th>
+                  <th style="width:120px">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="files-container"></tbody>
+            </table>
+          </div>
+          <div id="files-empty" class="empty-state hidden">This folder is empty</div>
         </div>
         <div id="shared-files-tab" class="hidden">
           <div id="shared-container"></div>
         </div>
+      </div>
+    </div>
+
+    <div id="new-folder-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>New Folder</h3>
+          <button class="close-btn" onclick="closeNewFolderModal()">&times;</button>
+        </div>
+        <input type="text" id="new-folder-name" placeholder="Folder name" />
+        <button class="btn btn-primary" style="width:100%" onclick="createFolder()">Create</button>
       </div>
     </div>
   </div>
@@ -149,6 +195,9 @@
     let session = null;
     let currentUser = null;
     let currentVisibility = 'private';
+    let currentFolderId = null;
+    let folderPath = [];
+    let folderMap = {};
 
     function showAuthTab(tab) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -220,8 +269,10 @@
       document.getElementById('user-name').textContent = currentUser.name;
       const roleBadge = document.getElementById('user-role');
       roleBadge.textContent = currentUser.role;
-      roleBadge.className = currentUser.role === 'admin' ? 'badge badge-admin' : 'badge badge-user';
+      roleBadge.className = currentUser.role === 'admin' ? 'badge badge-admin' : 'badge-user';
       document.getElementById('admin-btn').style.display = currentUser.role === 'admin' ? 'inline-block' : 'none';
+      currentFolderId = null;
+      folderPath = [];
       loadFiles();
       loadShared();
     }
@@ -238,13 +289,6 @@
       }
     }
 
-    function setVisibility(vis, btn) {
-      currentVisibility = vis;
-      btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      loadFiles();
-    }
-
     async function uploadFile(file) {
       if (!file) return;
       const progressWrap = document.getElementById('upload-progress');
@@ -257,6 +301,7 @@
       const formData = new FormData();
       formData.append('file', file);
       formData.append('visibility', currentVisibility);
+      formData.append('folderId', currentFolderId || '');
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', API_BASE + '/api/files');
@@ -289,35 +334,150 @@
     }
 
     async function loadFiles() {
-      const res = await apiCall('/api/files', {
-        headers: { 'X-Visibility': currentVisibility }
-      });
+      const headers = { 'X-Visibility': currentVisibility, 'X-Folder-ID': currentFolderId || '' };
+      const res = await apiCall('/api/files', { headers });
       if (res.error) return;
-      renderFiles(res.files, 'files-container', false);
+      const folders = res.folders || [];
+      const files = res.files || [];
+      folderMap = {};
+      folders.forEach(f => folderMap[f.id] = f);
+      renderFileManager(files, folders);
     }
 
     async function loadShared() {
       const res = await apiCall('/api/shared');
       if (res.error) return;
-      renderFiles(res.files, 'shared-container', true);
+      renderSharedFiles(res.files || []);
     }
 
-    function renderFiles(files, containerId, isShared) {
-      const container = document.getElementById(containerId);
-      if (files.length === 0) {
-        container.innerHTML = '<div class="empty-state">No files yet</div>';
+    function renderFileManager(files, folders) {
+      const tbody = document.getElementById('files-container');
+      const empty = document.getElementById('files-empty');
+      if (folders.length === 0 && files.length === 0) {
+        tbody.innerHTML = '';
+        empty.classList.remove('hidden');
         return;
       }
-      container.innerHTML = '<div class="file-grid">' + files.map(f => {
+      empty.classList.add('hidden');
+
+      let html = '';
+      folders.forEach(f => {
+        html += `<tr class="file-row" ondblclick="enterFolder('${f.id}', '${f.name.replace(/'/g, "\\'")}')">
+          <td><div class="file-name-cell"><span class="folder-icon">📁</span> ${f.name}</div></td>
+          <td>-</td>
+          <td>${new Date(f.createdAt).toLocaleDateString()}</td>
+          <td><button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();deleteFolder('${f.id}')">Delete</button></td>
+        </tr>`;
+      });
+
+      files.forEach(f => {
         const icon = getFileIcon(f.type);
-        const date = new Date(f.createdAt).toLocaleDateString();
-        return `<div class="file-card" onclick="downloadFile('${f.id}', '${f.owner}')">
-          <div class="file-icon">${icon}</div>
-          <div class="file-name">${f.name}</div>
-          <div class="file-meta">${formatSize(f.size)} - ${date}${isShared ? ' <br>from ' + f.owner : ''}</div>
-          <button class="btn btn-danger" style="width:100%;margin-top:8px;padding:6px;font-size:12px" onclick="event.stopPropagation();deleteFile('${f.id}', '${f.owner}', this)">Delete</button>
-        </div>`;
-      }).join('') + '</div>';
+        html += `<tr class="file-row" ondblclick="downloadFile('${f.id}', '${f.owner}')">
+          <td><div class="file-name-cell"><span class="file-icon">${icon}</span> ${f.name}</div></td>
+          <td>${formatSize(f.size)}</td>
+          <td>${new Date(f.createdAt).toLocaleDateString()}</td>
+          <td><button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();deleteFile('${f.id}', '${f.owner}')">Delete</button></td>
+        </tr>`;
+      });
+
+      tbody.innerHTML = html;
+      renderBreadcrumbs();
+    }
+
+    function renderSharedFiles(files) {
+      const container = document.getElementById('shared-container');
+      if (files.length === 0) {
+        container.innerHTML = '<div class="empty-state">No shared files yet</div>';
+        return;
+      }
+      container.innerHTML = '<table class="file-table"><thead><tr><th>Name</th><th style="width:120px">Size</th><th style="width:160px">Modified</th><th style="width:160px">From</th><th style="width:120px">Actions</th></tr></thead><tbody>' +
+        files.map(f => {
+          const icon = getFileIcon(f.type);
+          return `<tr class="file-row" ondblclick="downloadFile('${f.id}', '${f.owner}')">
+            <td><div class="file-name-cell"><span class="file-icon">${icon}</span> ${f.name}</div></td>
+            <td>${formatSize(f.size)}</td>
+            <td>${new Date(f.createdAt).toLocaleDateString()}</td>
+            <td>${f.owner}</td>
+            <td><button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();deleteFile('${f.id}', '${f.owner}')">Delete</button></td>
+          </tr>`;
+        }).join('') + '</tbody></table>';
+    }
+
+    function renderBreadcrumbs() {
+      const el = document.getElementById('breadcrumbs');
+      const backBtn = document.getElementById('back-btn');
+      let html = '<span class="breadcrumb ' + (folderPath.length === 0 ? 'current' : '') + '" onclick="goToFolder(null, \'Root\')">Root</span>';
+      folderPath.forEach((folder, idx) => {
+        html += '<span class="breadcrumb-sep">/</span>';
+        html += '<span class="breadcrumb ' + (idx === folderPath.length - 1 ? 'current' : '') + '" onclick="goToFolderPath(' + idx + ')">' + folder.name + '</span>';
+      });
+      el.innerHTML = html;
+      backBtn.style.display = folderPath.length > 0 ? 'inline-block' : 'none';
+    }
+
+    function enterFolder(folderId, folderName) {
+      folderPath.push({ id: folderId, name: folderName });
+      currentFolderId = folderId;
+      loadFiles();
+    }
+
+    function goBack() {
+      if (folderPath.length === 0) return;
+      folderPath.pop();
+      currentFolderId = folderPath.length > 0 ? folderPath[folderPath.length - 1].id : null;
+      loadFiles();
+    }
+
+    function goToFolder(folderId, name) {
+      if (folderId === null) {
+        folderPath = [];
+        currentFolderId = null;
+      } else {
+        const idx = folderPath.findIndex(f => f.id === folderId);
+        if (idx >= 0) {
+          folderPath = folderPath.slice(0, idx + 1);
+          currentFolderId = folderId;
+        }
+      }
+      loadFiles();
+    }
+
+    function goToFolderPath(index) {
+      folderPath = folderPath.slice(0, index + 1);
+      currentFolderId = folderPath[folderPath.length - 1].id;
+      loadFiles();
+    }
+
+    function openNewFolderModal() {
+      document.getElementById('new-folder-modal').classList.add('active');
+      document.getElementById('new-folder-name').value = '';
+      document.getElementById('new-folder-name').focus();
+    }
+
+    function closeNewFolderModal() {
+      document.getElementById('new-folder-modal').classList.remove('active');
+    }
+
+    async function createFolder() {
+      const name = document.getElementById('new-folder-name').value.trim();
+      if (!name) return alert('Folder name is required');
+      const res = await apiCall('/api/folders', {
+        method: 'POST',
+        body: JSON.stringify({ name, parentId: currentFolderId })
+      });
+      if (res.error) return alert(res.error);
+      closeNewFolderModal();
+      loadFiles();
+    }
+
+    async function deleteFolder(folderId) {
+      if (!confirm('Delete this folder and all its contents?')) return;
+      const res = await apiCall('/api/folders', {
+        method: 'DELETE',
+        body: JSON.stringify({ folderId })
+      });
+      if (res.error) return alert(res.error);
+      loadFiles();
     }
 
     async function downloadFile(fileId, owner) {
@@ -347,7 +507,7 @@
       }
     }
 
-    async function deleteFile(fileId, owner, btn) {
+    async function deleteFile(fileId, owner) {
       if (!confirm('Delete this file?')) return;
       await apiCall('/api/files', {
         method: 'DELETE',
