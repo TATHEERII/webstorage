@@ -154,7 +154,12 @@
           ...options.headers
         }
       });
-      return res.json();
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { error: text || `HTTP ${res.status}` };
+      }
     }
 
     async function register() {
