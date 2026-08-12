@@ -50,6 +50,14 @@
     .switch { display: flex; gap: 8px; margin-bottom: 12px; }
     .switch button { padding: 6px 12px; border: 1px solid #d1d5db; background: white; cursor: pointer; border-radius: 4px; }
     .switch button.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .progress-wrap { margin-top: 12px; }
+    .progress-bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #2563eb; width: 0%; transition: width 0.2s; }
+    .progress-text { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .spinner-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.85); display: none; align-items: center; justify-content: center; z-index: 200; flex-direction: column; gap: 12px; }
+    .spinner-overlay.active { display: flex; }
+    .spinner { width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -102,6 +110,10 @@
             <div>Click or drag files here to upload</div>
             <input type="file" id="file-input" class="hidden" onchange="uploadFile(this.files[0])" />
           </div>
+          <div id="upload-progress" class="progress-wrap" style="display:none">
+            <div class="progress-bar"><div id="upload-progress-fill" class="progress-fill"></div></div>
+            <div id="upload-progress-text" class="progress-text">Uploading... 0%</div>
+          </div>
           <div id="files-container" style="margin-top: 20px;"></div>
         </div>
         <div id="shared-files-tab" class="hidden">
@@ -125,6 +137,11 @@
       </div>
       <div id="admin-users-table"></div>
     </div>
+  </div>
+
+  <div id="spinner-overlay" class="spinner-overlay">
+    <div class="spinner"></div>
+    <div id="spinner-text">Downloading...</div>
   </div>
 
   <script>
@@ -230,16 +247,43 @@
 
     async function uploadFile(file) {
       if (!file) return;
+      const progressWrap = document.getElementById('upload-progress');
+      const progressFill = document.getElementById('upload-progress-fill');
+      const progressText = document.getElementById('upload-progress-text');
+      progressWrap.style.display = 'block';
+      progressFill.style.width = '0%';
+      progressText.textContent = `Uploading ${file.name}... 0%`;
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('visibility', currentVisibility);
-      const res = await fetch(API_BASE + '/api/files', {
-        method: 'POST',
-        headers: { 'X-Session-ID': session },
-        body: formData
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', API_BASE + '/api/files');
+      xhr.setRequestHeader('X-Session-ID', session || '');
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          progressFill.style.width = pct + '%';
+          progressText.textContent = `Uploading ${file.name}... ${pct}%`;
+        }
+      };
+
+      const result = await new Promise((resolve, reject) => {
+        xhr.onload = () => {
+          progressWrap.style.display = 'none';
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { resolve({ error: xhr.responseText || `HTTP ${xhr.status}` }); }
+        };
+        xhr.onerror = () => {
+          progressWrap.style.display = 'none';
+          reject(new Error('Network error'));
+        };
+        xhr.send(formData);
       });
-      const data = await res.json();
-      if (data.error) return alert(data.error);
+
+      if (result.error) return alert(result.error);
       document.getElementById('file-input').value = '';
       loadFiles();
     }
@@ -277,21 +321,30 @@
     }
 
     async function downloadFile(fileId, owner) {
-      const res = await fetch(`${API_BASE}/api/files/download?id=${fileId}&owner=${owner}`, {
-        headers: { 'X-Session-ID': session || '' }
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        alert(err.error || 'Download failed');
-        return;
+      const overlay = document.getElementById('spinner-overlay');
+      const spinnerText = document.getElementById('spinner-text');
+      overlay.classList.add('active');
+      spinnerText.textContent = 'Downloading...';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/files/download?id=${fileId}&owner=${owner}`, {
+          headers: { 'X-Session-ID': session || '' }
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+          alert(err.error || 'Download failed');
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileId;
+        a.click();
+        URL.revokeObjectURL(url);
+      } finally {
+        overlay.classList.remove('active');
       }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileId;
-      a.click();
-      URL.revokeObjectURL(url);
     }
 
     async function deleteFile(fileId, owner, btn) {
