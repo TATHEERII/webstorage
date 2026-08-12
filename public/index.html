@@ -78,6 +78,8 @@
     .context-menu-item { padding: 8px 16px; cursor: pointer; font-size: 14px; }
     .context-menu-item:hover { background: #f3f4f6; }
     .context-menu-item.danger { color: #dc2626; }
+    .btn-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
+    .btn:disabled { opacity: 0.7; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -127,7 +129,7 @@
               <div id="breadcrumbs" class="breadcrumbs"></div>
             </div>
             <div style="display:flex;gap:8px;">
-              <button class="btn btn-primary" onclick="openNewFolderModal()">New Folder</button>
+              <button class="btn btn-primary" id="new-folder-btn" onclick="openNewFolderModal()">New Folder</button>
               <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">Upload</button>
               <input type="file" id="file-input" class="hidden" onchange="uploadFile(this.files[0])" />
             </div>
@@ -461,13 +463,57 @@
     async function createFolder() {
       const name = document.getElementById('new-folder-name').value.trim();
       if (!name) return alert('Folder name is required');
+      const btn = document.getElementById('new-folder-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner"></span>Creating...';
+
+      const tempId = 'temp-' + Date.now();
+      const optimisticFolder = {
+        id: tempId,
+        name,
+        parentId: currentFolderId,
+        owner: currentUser.email,
+        createdAt: Date.now()
+      };
+
+      const tbody = document.getElementById('files-container');
+      const empty = document.getElementById('files-empty');
+      empty.classList.add('hidden');
+      const row = document.createElement('tr');
+      row.className = 'file-row';
+      row.id = 'folder-' + tempId;
+      row.innerHTML = `<td><div class="file-name-cell"><span class="folder-icon">📁</span> ${name}</div></td>
+        <td>-</td>
+        <td>${new Date().toLocaleDateString()}</td>
+        <td><button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();deleteFolder('${tempId}')">Delete</button></td>`;
+      row.ondblclick = () => enterFolder(tempId, name);
+      tbody.appendChild(row);
+
+      closeNewFolderModal();
+
       const res = await apiCall('/api/folders', {
         method: 'POST',
         body: JSON.stringify({ name, parentId: currentFolderId })
       });
-      if (res.error) return alert(res.error);
-      closeNewFolderModal();
-      loadFiles();
+
+      btn.disabled = false;
+      btn.innerHTML = 'New Folder';
+
+      if (res.error) {
+        const rowEl = document.getElementById('folder-' + tempId);
+        if (rowEl) rowEl.remove();
+        alert(res.error);
+        return;
+      }
+
+      const realRow = document.getElementById('folder-' + tempId);
+      if (realRow && res.folder) {
+        realRow.id = 'folder-' + res.folder.id;
+        realRow.querySelector('.btn-danger').setAttribute('onclick', `event.stopPropagation();deleteFolder('${res.folder.id}')`);
+        realRow.ondblclick = () => enterFolder(res.folder.id, res.folder.name);
+      }
+
+      setTimeout(() => loadFiles(), 300);
     }
 
     async function deleteFolder(folderId) {
