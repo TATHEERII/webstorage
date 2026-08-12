@@ -271,19 +271,30 @@
           <div class="file-icon">${icon}</div>
           <div class="file-name">${f.name}</div>
           <div class="file-meta">${formatSize(f.size)} - ${date}${isShared ? ' <br>from ' + f.owner : ''}</div>
+          <button class="btn btn-danger" style="width:100%;margin-top:8px;padding:6px;font-size:12px" onclick="event.stopPropagation();deleteFile('${f.id}', '${f.owner}', this)">Delete</button>
         </div>`;
       }).join('') + '</div>';
     }
 
     async function downloadFile(fileId, owner) {
-      const url = `${API_BASE}/api/files/download?id=${fileId}&owner=${owner}`;
+      const res = await fetch(`${API_BASE}/api/files/download?id=${fileId}&owner=${owner}`, {
+        headers: { 'X-Session-ID': session || '' }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        alert(err.error || 'Download failed');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileId;
       a.click();
+      URL.revokeObjectURL(url);
     }
 
-    async function deleteFile(fileId, owner) {
+    async function deleteFile(fileId, owner, btn) {
       if (!confirm('Delete this file?')) return;
       await apiCall('/api/files', {
         method: 'DELETE',

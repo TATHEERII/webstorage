@@ -249,14 +249,15 @@ async function handleListFiles(request, env, cors) {
   }
 
   const visibility = request.headers.get('X-Visibility') || 'private';
-  let prefix = visibility === 'shared' ? `share:${session.email}:` : `file:${session.email}:`;
-
-  const { keys } = await env.STORAGE.list({ prefix });
+  const { keys } = await env.STORAGE.list({ prefix: `file:${session.email}:` });
   const files = [];
   for (const key of keys) {
     const data = await env.STORAGE.get(key.name);
     if (data) {
-      files.push(JSON.parse(data));
+      const file = JSON.parse(data);
+      if (visibility === 'shared' ? file.visibility === 'shared' : file.visibility !== 'shared') {
+        files.push(file);
+      }
     }
   }
 
