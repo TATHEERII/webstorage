@@ -632,13 +632,6 @@
     }
 
     checkSession();
-
-    setInterval(() => {
-      if (currentUser && !document.getElementById('main-view').classList.contains('hidden')) {
-        loadFiles();
-        loadShared();
-      }
-    }, 2000);
   </script>
 </body>
 </html>
